@@ -44,7 +44,7 @@ def read_culgi_ts(ctf_file):
     return(df)
 
 
-def read_culgi_tstime(ctf_file, nmol=None):
+def read_culgi_tstime(ctf_file, nmol=None, dropna=True):
     """read the timeseries file obtained from culgi and converts the index
     into time format
     :ctf_file: file containing the timeseries (ctf format)
@@ -67,10 +67,13 @@ def read_culgi_tstime(ctf_file, nmol=None):
             df['Hydrogen bonding Energy (kcal/mol)']) /
             (df['X (A)'] * df['Y (A)'] * df['Z (A)']))
 
+    if dropna:
+        return(df.dropna())
+
     return(df)
 
 
-def culgi_ts_panel(chainf, nmol=None):
+def culgi_ts_panel(chainf, nmol=None, dropna=True):
     """creates a pandas panel from a list of ctf file paths
     :chainf: files to be included (obtained as chainf = !ls */*.ctf)
     :nmol: number or molecs to calculate solubility [optional]
@@ -80,17 +83,33 @@ def culgi_ts_panel(chainf, nmol=None):
     """
     import os.path as op
     import pandas as pd
+    import pprint
 
     data = {}
 
-    print("Reading", len(chainf), "files to be included in panel.")
+    print("Including %d files to panel" % len(chainf), end="")
 
+    count = 0
+    err_list = []
     for fp in chainf:
         # base = op.basename(fp)
         # print("reading ", fp)
         path = op.dirname(fp)
         last = path.split("/")[-1]
-        data[last] = read_culgi_tstime(fp, nmol)
+
+        temp_df = read_culgi_tstime(fp, nmol, dropna)
+        if not temp_df.empty:
+            data[last] = temp_df
+        else:
+            count += 1
+            err_list.append(last)
+
+    if count > 0:
+        print(" (%d rejections)" % count)
+        print("\t", end="")
+        pprint.pprint(err_list)
+    else:
+        print()
 
     return(pd.Panel(data))
 
