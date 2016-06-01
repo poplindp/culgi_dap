@@ -61,10 +61,16 @@ def read_culgi_tstime(ctf_file, nmol=None, dropna=True):
         nAv = 6.022e23
         convCtte = -1.0 * float(nmol) * 1.0e3 / (nAv * 1e-24)
 
+# adapting for old versions
+        prefix_lbl = ""
+        if sum(df.columns.str.contains(r'Intermolecular')):
+            prefix_lbl = "Intermolecular "
+        el_lbl = prefix_lbl + 'Electrostatics Energy (kcal/mol)'
+        vdw_label = prefix_lbl + 'VdW Energy (kcal/mol)'
+        hb_lbl = prefix_lbl + 'Hydrogen bonding Energy (kcal/mol)'
+
         df['Solubility (cal/cc)'] = np.sqrt(convCtte * (
-            df['Electrostatics Energy (kcal/mol)'] +
-            df['VdW Energy (kcal/mol)'] +
-            df['Hydrogen bonding Energy (kcal/mol)']) /
+            df[el_lbl] + df[vdw_label] + df[hb_lbl]) /
             (df['X (A)'] * df['Y (A)'] * df['Z (A)']))
 
     if dropna:
