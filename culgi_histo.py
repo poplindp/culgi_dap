@@ -40,6 +40,7 @@ def read_culgi_hist_ang(ctf_file):
     df = pd.read_csv(
             ctf_file, index_col="#Angle (degrees)", sep='\t',
             skiprows=list(np.append(np.arange(fi), fi+1))).dropna(1)
+    df['Corrected_Distrib'] = df['Distribution'] / np.sin(np.deg2rad(df.index)).values
 
     return(df)
 
