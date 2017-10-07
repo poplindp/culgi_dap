@@ -1,50 +1,88 @@
 #!/usr/bin/python3
 
 
-def first_instance(rawstr, filename):
-    """takes a string and return the first instance line number
-
+def get_line_number(rawstr, filename):
+    """takes a string (maybe a regex) and return the first instance line number
     :rawstr: raw string
     :filename: filename
     :returns: line number
-
     """
 
     import re
-
     regex = re.compile(rawstr)
 
-    with open(filename, 'r') as f:
-        n = 0
-        for line in f:
-            n += 1
+    with open(filename, 'r') as myFile:
+        for num, line in enumerate(myFile,1):
             if regex.search(line):
-                return(n)
+                return(num)
         raise ValueError("String not found")
 
 
-def read_culgi_ts(ctf_file):
+def read_ctf(ctf_file, time_step=0.5):
     """function able to read the timeseries file obtained from culgi
-
     :ctf_file: file containing the timeseries (ctf format)
-    :returns: a pandas dataframe containing all ts.
-
+    :time_step: simulation time step
+    :returns: a pandas dataframe containing the ts.
     """
 
-    import numpy as np
     import pandas as pd
 
-    fi = first_instance(r'^Data', ctf_file)
-
 # dropna(1) removes the created (empty) last column
-    df = pd.read_csv(
-            ctf_file, index_col="#Index", sep='\t',
-            skiprows=list(np.append(np.arange(fi), fi+1))).dropna(1)
+    ctf = pd.read_csv(
+            ctf_file, index_col="#Index", sep='\t', parse_dates=True,
+            skiprows=get_line_number('^Data:', ctf_file))
+    #.dropna(1)
 
-    return(df)
+# remove Unnamed empty column (read_cvs bug), rename and rescale index column
+    ctf = ctf.loc[:, ~ctf.columns.str.contains('^Unnamed')]
+    ctf.index.rename("Time (ns)", inplace=True)
+    ctf.index = ctf.index * time_step
+
+    ctf.filename = ctf_file
+
+    return(ctf)
 
 
-def read_culgi_tstime(ctf_file, nmol=None, dropna=True):
+def ctf_Intra(ctf, intra_suffix="_IntraEne"):
+    """
+    takes a ctf file and a ctf intraenergy file to build and "old format a"
+    """
+    import sys
+
+    if any("Intermolecular" in word for word in ctf.columns):
+        print("Intermolecular terms already present.  Not doing anything.")
+        return(ctf)
+
+    ctf_IntraFileName = ctf.filename.replace("_Inst",intra_suffix)
+    try:
+        ctf_Intra = read_ctf(ctf_IntraFileName)
+    except IOError:
+        print("Cannot open Intramolecular energy file: '{}'".format(ctf_IntraFileName)
+                , file=sys.stderr)
+        sys.exit(1)
+
+# adding Intramolecular and units strings
+    ctf_Intra.columns = ['Intramolecular ' + str(col) + ' (kcal/mol)'
+            for col in ctf_Intra.columns]
+
+    ctf = ctf.join(ctf_Intra)
+
+# Removing intramolecular contributions
+    ctf["Electrostatics Energy (kcal/mol)"] = ctf["Electrostatics Energy (kcal/mol)"] - ctf["Intramolecular Electrostatics Energy (kcal/mol)"]
+    ctf["VdW Energy (kcal/mol)"] = ctf["VdW Energy (kcal/mol)"] - ctf["Intramolecular VdW Energy (kcal/mol)"]
+    ctf["Hydrogen bonding Energy (kcal/mol)"] = ctf["Hydrogen bonding Energy (kcal/mol)"] - ctf["Intramolecular Hydrogen Bonding Energy (kcal/mol)"]
+
+    if (ctf["Intramolecular Hydrogen Bonding Energy (kcal/mol)"] != 0).any():
+        print ("Intramolecular HB Energy different to zero!")
+
+    ctf=ctf.rename(columns = {'Electrostatics Energy (kcal/mol)':'Intermolecular Electrostatics Energy (kcal/mol)'})
+    ctf=ctf.rename(columns = {'VdW Energy (kcal/mol)':'Intermolecular VdW Energy (kcal/mol)'})
+    ctf=ctf.rename(columns = {'Hydrogen bonding Energy (kcal/mol)':'Intermolecular Hydrogen bonding Energy (kcal/mol)'})
+
+    return(ctf)
+
+
+def solubility(ctf, nmol=1, dropna=True):
     """read the timeseries file obtained from culgi and converts the index
     into time format
     :ctf_file: file containing the timeseries (ctf format)
@@ -53,32 +91,34 @@ def read_culgi_tstime(ctf_file, nmol=None, dropna=True):
     """
 
     import pandas as pd
-    df = read_culgi_ts(ctf_file)
-# df = df.set_index(df.index.to_datetime())
-    df = df.set_index(pd.to_datetime(df.index))
 
-# if nmol is passed the Solubility is calculated
-    if nmol:
-        import numpy as np
-        nAv = 6.022e23
-        convCtte = -1.0 * float(nmol) * 1.0e3 / (nAv * 1e-24)
+    if not any("Intermolecular" in word for word in ctf.columns):
+        print("Intermolecular terms not present. Calculating them.")
+        ctf = ctf_Intra(ctf)
+
+# FIXME is this convertion really necessary?
+    #df = df.set_index(pd.to_datetime(df.index))
+
+    import numpy as np
+    nAv = 6.022e23
+    convCtte = -1.0 * float(nmol) * 1.0e3 / (nAv * 1e-24)
 
 # adapting for old versions
-        prefix_lbl = ""
-        if sum(df.columns.str.contains(r'Intermolecular')):
-            prefix_lbl = "Intermolecular "
-        el_lbl = prefix_lbl + 'Electrostatics Energy (kcal/mol)'
-        vdw_label = prefix_lbl + 'VdW Energy (kcal/mol)'
-        hb_lbl = prefix_lbl + 'Hydrogen bonding Energy (kcal/mol)'
+    prefix_lbl = ""
+    if sum(ctf.columns.str.contains(r'Intermolecular')):
+        prefix_lbl = "Intermolecular "
+    el_lbl = prefix_lbl + 'Electrostatics Energy (kcal/mol)'
+    vdw_label = prefix_lbl + 'VdW Energy (kcal/mol)'
+    hb_lbl = prefix_lbl + 'Hydrogen bonding Energy (kcal/mol)'
 
-        df['Solubility (cal/cc)'] = np.sqrt(convCtte * (
-            df[el_lbl] + df[vdw_label] + df[hb_lbl]) /
-            (df['X (A)'] * df['Y (A)'] * df['Z (A)']))
+    ctf['Solubility (cal/cc)'] = np.sqrt(convCtte * (
+        ctf[el_lbl] + ctf[vdw_label] + ctf[hb_lbl]) /
+        (ctf['X (A)'] * ctf['Y (A)'] * ctf['Z (A)']))
 
     if dropna:
-        return(df.dropna())
+        return(ctf.dropna())
 
-    return(df)
+    return(ctf)
 
 
 def read_culgi_descriptors(out_file):
