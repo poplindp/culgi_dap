@@ -127,6 +127,29 @@ def solubility(ctf, nmol=1, dropna=False):
     return(ctf)
 
 
+def feature_selection(df, column_name="Solubility (cal/cc)", kvec=10, mutual=True):
+
+    from sklearn.feature_selection import SelectKBest, chi2
+    from sklearn.feature_selection import f_regression, mutual_info_regression
+
+    # Select matrix and vector to compare with
+    X = df.drop(column_name, axis=1)
+    Y = df[column_name]
+
+    # select method
+    if mutual:
+        selector = SelectKBest(f_regression, k=kvec)
+    else:
+        selector = SelectKBest(mutual_info_regression, k=kvec)
+
+    selector.fit_transform(X, Y)
+
+    # pick indices picked by selector
+    indxs_sel = selector.get_support(indices=True)
+
+    return (df[df.columns[indxs_sel]].join(Y))
+
+
 #
 # Functions dfmi creation
 #
