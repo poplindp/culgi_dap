@@ -127,27 +127,48 @@ def solubility(ctf, nmol=1, dropna=False):
     return(ctf)
 
 
-def feature_selection(df, column_name="Solubility (cal/cc)", kvec=10, mutual=True):
+def remove_novar(df):
+    """
+    Function able to remove the 0 variance columns (constant values)
+    """
+
+    from sklearn.feature_selection import VarianceThreshold
+
+    sel = VarianceThreshold()
+    sel.fit_transform(df)
+
+    # pick indices picked by selector
+    indxs_sel = sel.get_support(indices=True)
+
+    return (df[df.columns[indxs_sel]])
+
+
+def feature_selection(df, col="Solubility (cal/cc)", kvec=10, mutual=True):
+    """
+    Function able to find the kvec highly correlated columns with the one
+    specified by col.  Two methods are available (f_reg & mutual_info)
+    """
 
     from sklearn.feature_selection import SelectKBest, chi2
-    from sklearn.feature_selection import f_regression, mutual_info_regression
 
-    # Select matrix and vector to compare with
-    X = df.drop(column_name, axis=1)
-    Y = df[column_name]
+    # Select matrix and reference vector to compare with
+    mat = df.drop(col, axis=1)
+    ref = df[col]
 
     # select method
     if mutual:
-        selector = SelectKBest(f_regression, k=kvec)
+        from sklearn.feature_selection import mutual_info_regression
+        sel = SelectKBest(mutual_info_regression, k=kvec)
     else:
-        selector = SelectKBest(mutual_info_regression, k=kvec)
+        from sklearn.feature_selection import f_regression
+        sel = SelectKBest(f_regression, k=kvec)
 
-    selector.fit_transform(X, Y)
+    sel.fit_transform(mat, ref)
 
     # pick indices picked by selector
-    indxs_sel = selector.get_support(indices=True)
+    indxs_sel = sel.get_support(indices=True)
 
-    return (df[df.columns[indxs_sel]].join(Y))
+    return (df[df.columns[indxs_sel]].join(ref))
 
 
 #
