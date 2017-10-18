@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 
 
+
 def get_line_number(rawstr, filename):
     """takes a string (maybe a regex) and return the first instance line number
     :rawstr: raw string
@@ -127,55 +128,7 @@ def solubility(ctf, nmol=1, dropna=False):
     return(ctf)
 
 
-def remove_novar(df):
-    """
-    Function able to remove the 0 variance columns (constant values)
-    """
-
-    from sklearn.feature_selection import VarianceThreshold
-
-    sel = VarianceThreshold()
-    sel.fit_transform(df)
-
-    # pick indices picked by selector
-    indxs_sel = sel.get_support(indices=True)
-
-    return (df[df.columns[indxs_sel]])
-
-
-def feature_selection(df, col="Solubility (cal/cc)", kvec=10, mutual=True):
-    """
-    Function able to find the kvec highly correlated columns with the one
-    specified by col.  Two methods are available (f_reg & mutual_info)
-    """
-
-    from sklearn.feature_selection import SelectKBest, chi2
-
-    # Select matrix and reference vector to compare with
-    mat = df.drop(col, axis=1)
-    ref = df[col]
-
-    # select method
-    if mutual:
-        from sklearn.feature_selection import mutual_info_regression
-        sel = SelectKBest(mutual_info_regression, k=kvec)
-    else:
-        from sklearn.feature_selection import f_regression
-        sel = SelectKBest(f_regression, k=kvec)
-
-    sel.fit_transform(mat, ref)
-
-    # pick indices picked by selector
-    indxs_sel = sel.get_support(indices=True)
-
-    return (df[df.columns[indxs_sel]].join(ref))
-
-
-#
-# Functions dfmi creation
-#
-
-# This functions should only be called inside build_dfmi
+# This function should only be called (mostly) inside build_dfmi
 def read_culgi_descriptors(out_file):
     """function able to read the descriptors file obtained from culgi
     :out_file: file containing the timeseries (ctf format)
@@ -183,25 +136,26 @@ def read_culgi_descriptors(out_file):
     print("descriptors")
     """
 
-    import numpy as np
     import pandas as pd
-    fi = first_instance(r'^------', out_file)+1
 
-# dropna(2,1) removes the 2nd (empty) column
-    df = pd.read_csv(
-            out_file, header=None, index_col=0, sep='[=|\t]', engine='python',
-            skiprows=list(np.arange(fi))).drop(2, 1)
-    df = df.drop(df.index[len(df)-1])  # removing last row
+    df = pd.read_csv(out_file, header=None, index_col=0, sep='[=|\t]',
+            engine='python', skiprows=get_line_number('^------', out_file),
+            usecols=[0,1], skipfooter=2)
 # converting to numbers
     df[1] = pd.to_numeric(df[1], errors='coerce', downcast='signed')
+
     return(df)
 
+
+#
+# Functions dfmi creation
+#
 
 # FIXME nmol should be read from the input file
 #       in fact input files should be added
 
 def build_dfmi(system, sample, files="mm06*.ctf", nmol=1,
-               axis=0, verb=False):
+               axis=0, verb=False, descrbool=True):
     """function building a multiindex dataframe containing the averages
     of culgi time series
     if descriptor files are present, add it to table
@@ -257,8 +211,8 @@ def build_dfmi(system, sample, files="mm06*.ctf", nmol=1,
                 fil_exists = os.path.exists(fil_descrp)
 #                if verb:
 #                    print(fil_descrp)
-#                if descrip:
-                if fil_exists:
+#                if descrip :
+                if fil_exists and descrbool:
                     if verb:
                         print("\t\t--> " + fil_descrp)
                     cdes = read_culgi_descriptors(fil_descrp)
