@@ -178,6 +178,7 @@ def build_dfmi(system, sample, files="mm06*.ctf", nmol=1,
     import re
 
     dict1mf = {}
+    #FIXME: would be great to only list directories... 
     system_list = [file for file in glob.glob(system, recursive=True)]
 
     for sys in system_list:
@@ -185,8 +186,10 @@ def build_dfmi(system, sample, files="mm06*.ctf", nmol=1,
         sys_name = os.path.basename(sys)
         if verb:
             print(sys_name)
+    #FIXME: same here it would be great to only list directories... 
         sample_list = [file for file in
-                       glob.glob(sys + "/runs/" + sample, recursive=True)]
+                       glob.glob(sys + "/" + sample, recursive=True)]
+                      # glob.glob(sys + "/runs/" + sample, recursive=True)]
 
         for sam in sample_list:
             dict3mf = {}
@@ -196,6 +199,7 @@ def build_dfmi(system, sample, files="mm06*.ctf", nmol=1,
             files_list = [file for file in
                           glob.glob(sam + "/" + files+"_Inst.ctf", recursive=True)]
 
+            print(files_list)
             for fil in files_list:
                 fil_name = os.path.basename(fil)
                 if verb:
@@ -206,7 +210,8 @@ def build_dfmi(system, sample, files="mm06*.ctf", nmol=1,
 
 
 # FIXME Here also input file should be added.
-                fil_descrp = re.sub(r'_Inst.*.ctf', r'.cof_descriptors.out',
+                #fil_descrp = re.sub(r'_Inst.*.ctf', r'.cof_descriptors.out',
+                fil_descrp = re.sub(r'_Inst.ctf', r'_desc.out',
                                     fil)
                 fil_exists = os.path.exists(fil_descrp)
 #                if verb:
